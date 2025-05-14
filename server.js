@@ -248,9 +248,14 @@ app.get('/', (req, res) => {
 app.use(errorHandler);
 
 // Start server
-app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-});
+if (process.env.NODE_ENV !== 'production') {
+    app.listen(PORT, () => {
+        console.log(`Server is running on port ${PORT}`);
+    });
+} else {
+    // In production (Vercel), we don't need to explicitly call listen
+    console.log('Server ready to handle requests in serverless mode');
+}
 
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (err) => {
