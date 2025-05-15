@@ -7,6 +7,8 @@ const jwt = require('jsonwebtoken');
 const { OAuth2Client } = require('google-auth-library');
 const crypto = require('crypto');
 const { sendEmail } = require('../utils/email.utils');
+const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
 
 // Google OAuth client
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -18,28 +20,133 @@ exports.register = async (req, res, next) => {
 
         console.log('Register attempt:', { name, email, phone });
 
-        // Check if user already exists in MongoDB
+        // Check if MongoDB is connected
+        if (mongoose.connection.readyState !== 1) {
+            console.error(`MongoDB not fully connected (state: ${mongoose.connection.readyState}). Returning error.`);
+            return res.status(500).json({
+                success: false,
+                message: 'Database connection unavailable',
+                error: 'Cannot establish database connection. Please try again later.'
+            });
+        }
+
+        // Create a promise with timeout for finding existing user
+        const findExistingUserWithTimeout = async () => {
+            return new Promise(async (resolve, reject) => {
+                // Set a timeout
+                const timeout = setTimeout(() => {
+                    reject(new Error('User lookup timed out after 5000ms'));
+                }, 5000);
+
+                try {
+                    // Try to find existing user using Mongoose first
+                    let existingUser = null;
+
+                    try {
+                        existingUser = await User.findOne({ email });
+                    } catch (mongooseError) {
+                        console.error('Mongoose findOne error during registration:', mongooseError);
+
+                        // If Mongoose fails, try using native MongoDB client as backup
+                        if (global.mongoClient) {
+                            try {
+                                const db = global.mongoClient.db();
+                                existingUser = await db.collection('users').findOne({ email });
+                            } catch (nativeError) {
+                                console.error('Native MongoDB findOne error during registration:', nativeError);
+                            }
+                        }
+                    }
+
+                    clearTimeout(timeout);
+                    resolve(existingUser);
+                } catch (err) {
+                    clearTimeout(timeout);
+                    reject(err);
+                }
+            });
+        };
+
+        // Create a promise with timeout for creating a new user
+        const createUserWithTimeout = async (userData) => {
+            return new Promise(async (resolve, reject) => {
+                // Set a timeout
+                const timeout = setTimeout(() => {
+                    reject(new Error('User creation timed out after 8000ms'));
+                }, 8000);
+
+                try {
+                    let newUser = null;
+
+                    // Try to create user with Mongoose
+                    try {
+                        newUser = await User.create(userData);
+                    } catch (mongooseError) {
+                        console.error('Mongoose create error during registration:', mongooseError);
+
+                        // If Mongoose fails, try using native MongoDB client
+                        if (global.mongoClient) {
+                            try {
+                                const db = global.mongoClient.db();
+
+                                // Hash the password manually since we're bypassing Mongoose pre-save hooks
+                                const salt = await bcrypt.genSalt(10);
+                                const hashedPassword = await bcrypt.hash(userData.password, salt);
+
+                                const userDoc = {
+                                    ...userData,
+                                    password: hashedPassword,
+                                    createdAt: new Date(),
+                                    updatedAt: new Date()
+                                };
+
+                                const result = await db.collection('users').insertOne(userDoc);
+                                if (result.insertedId) {
+                                    // Convert to Mongoose model
+                                    userDoc._id = result.insertedId;
+                                    newUser = new User(userDoc);
+                                }
+                            } catch (nativeError) {
+                                console.error('Native MongoDB insertOne error during registration:', nativeError);
+                            }
+                        }
+                    }
+
+                    clearTimeout(timeout);
+                    resolve(newUser);
+                } catch (err) {
+                    clearTimeout(timeout);
+                    reject(err);
+                }
+            });
+        };
+
         try {
-            const existingUser = await User.findOne({ email });
+            // Check if user exists with timeout protection
+            const existingUser = await findExistingUserWithTimeout();
+
             if (existingUser) {
                 return res.status(400).json({
                     success: false,
                     message: 'User with this email already exists'
                 });
             }
-        } catch (err) {
-            console.log('MongoDB user check error:', err);
-            // Continue even if MongoDB check fails
-        }
 
-        // Create new user
-        try {
-            const newUser = await User.create({
+            // Create new user with timeout protection
+            const newUser = await createUserWithTimeout({
                 name,
                 email,
                 password,
                 phone
             });
+
+            if (!newUser) {
+                return res.status(500).json({
+                    success: false,
+                    message: 'Failed to create user account',
+                    error: 'Database operation failed'
+                });
+            }
 
             // Generate tokens
             const accessToken = newUser.generateAuthToken();
@@ -47,12 +154,12 @@ exports.register = async (req, res, next) => {
 
             // Send response
             return sendTokenResponse(newUser, accessToken, refreshToken, 201, res);
-        } catch (err) {
-            console.error('Error creating user:', err);
-            return res.status(400).json({
+        } catch (timeoutError) {
+            console.error('Registration timeout error:', timeoutError);
+            return res.status(503).json({
                 success: false,
                 message: 'Failed to create user',
-                error: err.message
+                error: timeoutError.message
             });
         }
     } catch (error) {
@@ -195,34 +302,97 @@ exports.login = async (req, res, next) => {
 
         console.log('Login attempt:', { email });
 
-        // Check if user exists
-        const user = await User.findOne({ email });
-        if (!user) {
-            return res.status(401).json({
+        // Check if MongoDB is connected
+        if (mongoose.connection.readyState !== 1) {
+            console.error(`MongoDB not fully connected (state: ${mongoose.connection.readyState}). Returning error.`);
+            return res.status(500).json({
                 success: false,
-                message: 'Invalid email or password'
+                message: 'Database connection unavailable',
+                error: 'Cannot establish database connection. Please try again later.'
             });
         }
 
-        // Check password
-        const isPasswordMatch = await user.comparePassword(password);
-        if (!isPasswordMatch) {
-            return res.status(401).json({
+        // Create a promise with timeout for finding the user
+        const findUserWithTimeout = async () => {
+            return new Promise(async (resolve, reject) => {
+                // Set a timeout
+                const timeout = setTimeout(() => {
+                    reject(new Error('Operation timed out after 5000ms'));
+                }, 5000);
+
+                try {
+                    // Try to find user using native MongoDB client if available (as backup)
+                    let user = null;
+
+                    // Try Mongoose first
+                    try {
+                        user = await User.findOne({ email });
+                    } catch (mongooseError) {
+                        console.error('Mongoose findOne error:', mongooseError);
+
+                        // If Mongoose fails, try using native MongoDB client
+                        if (global.mongoClient) {
+                            try {
+                                const db = global.mongoClient.db();
+                                const userDoc = await db.collection('users').findOne({ email });
+
+                                if (userDoc) {
+                                    // Convert to Mongoose model if possible
+                                    user = new User(userDoc);
+                                }
+                            } catch (nativeError) {
+                                console.error('Native MongoDB findOne error:', nativeError);
+                            }
+                        }
+                    }
+
+                    clearTimeout(timeout);
+                    resolve(user);
+                } catch (err) {
+                    clearTimeout(timeout);
+                    reject(err);
+                }
+            });
+        };
+
+        try {
+            // Find user with timeout protection
+            const user = await findUserWithTimeout();
+
+            if (!user) {
+                return res.status(401).json({
+                    success: false,
+                    message: 'Invalid email or password'
+                });
+            }
+
+            // Check password
+            const isPasswordMatch = await user.comparePassword(password);
+            if (!isPasswordMatch) {
+                return res.status(401).json({
+                    success: false,
+                    message: 'Invalid email or password'
+                });
+            }
+
+            // Update last login time
+            user.lastLogin = Date.now();
+            await user.save();
+
+            // Generate tokens
+            const accessToken = user.generateAuthToken();
+            const refreshToken = user.generateRefreshToken();
+
+            // Send response
+            sendTokenResponse(user, accessToken, refreshToken, 200, res);
+        } catch (timeoutError) {
+            console.error('Login timeout error:', timeoutError);
+            return res.status(503).json({
                 success: false,
-                message: 'Invalid email or password'
+                message: 'Login service temporarily unavailable',
+                error: timeoutError.message
             });
         }
-
-        // Update last login time
-        user.lastLogin = Date.now();
-        await user.save();
-
-        // Generate tokens
-        const accessToken = user.generateAuthToken();
-        const refreshToken = user.generateRefreshToken();
-
-        // Send response
-        sendTokenResponse(user, accessToken, refreshToken, 200, res);
     } catch (error) {
         console.error('Login error:', error);
         return res.status(500).json({

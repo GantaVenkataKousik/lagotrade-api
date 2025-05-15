@@ -100,14 +100,42 @@ userSchema.pre('save', async function (next) {
 
 // Compare entered password with hashed password in DB
 userSchema.methods.comparePassword = async function (enteredPassword) {
-    return await bcrypt.compare(enteredPassword, this.password);
+    try {
+        // Safety check if password is missing
+        if (!this.password) {
+            console.error('User has no password field:', this._id);
+            return false;
+        }
+
+        // Use a timeout to prevent hanging
+        return await new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+                console.error('Password comparison timeout');
+                resolve(false);
+            }, 3000);
+
+            bcrypt.compare(enteredPassword, this.password)
+                .then(result => {
+                    clearTimeout(timeout);
+                    resolve(result);
+                })
+                .catch(err => {
+                    clearTimeout(timeout);
+                    console.error('Password comparison error:', err);
+                    resolve(false);
+                });
+        });
+    } catch (error) {
+        console.error('Error in comparePassword:', error);
+        return false;
+    }
 };
 
 // Generate JWT token
 userSchema.methods.generateAuthToken = function () {
     return jwt.sign(
         { id: this._id },
-        process.env.JWT_SECRET,
+        process.env.JWT_SECRET || 'fallback_jwt_secret_value_for_development',
         { expiresIn: process.env.JWT_EXPIRE || '1d' }
     );
 };
@@ -116,7 +144,7 @@ userSchema.methods.generateAuthToken = function () {
 userSchema.methods.generateRefreshToken = function () {
     return jwt.sign(
         { id: this._id },
-        process.env.REFRESH_TOKEN_SECRET,
+        process.env.REFRESH_TOKEN_SECRET || 'fallback_refresh_token_secret_for_development',
         { expiresIn: process.env.REFRESH_TOKEN_EXPIRE || '7d' }
     );
 };
