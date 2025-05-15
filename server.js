@@ -1,14 +1,15 @@
 const express = require('express');
-const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const dotenv = require('dotenv');
 const path = require('path');
-const { MongoClient, ServerApiVersion } = require('mongodb');
 
 // Load environment variables
 dotenv.config();
+
+// Import database connection
+const database = require('./db/database');
 
 // Import routes
 const authRoutes = require('./routes/auth.routes');
@@ -55,201 +56,19 @@ app.use(morgan('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-
-// Disable Mongoose buffering globally - IMPORTANT: This must be done before creating a connection
-mongoose.set('bufferCommands', false);
-mongoose.set('autoIndex', false);
-mongoose.set('strictQuery', true);
-
-// Set Mongoose options with much higher timeouts
-const mongooseOptions = {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-    serverSelectionTimeoutMS: 30000, // 30 seconds
-    socketTimeoutMS: 45000, // 45 seconds
-    connectTimeoutMS: 30000, // 30 seconds
-    // Disable buffering for serverless environment
-    bufferCommands: false
-};
-
-// Database connection - MongoDB only
-let isMongoConnected = false;
-let mongoConnectionAttempts = 0;
-const MAX_CONNECTION_ATTEMPTS = 5;
-
-
-
-// Add this function to initialize the database with required collections
-const initializeDatabase = async () => {
-    try {
-        if (!global.mongoClient) {
-            console.error('Cannot initialize database - MongoDB client not available');
-            return false;
-        }
-
-        const db = global.mongoClient.db('trade');
-
-        // Get list of existing collections
-        const collections = await db.listCollections().toArray();
-        const collectionNames = collections.map(c => c.name);
-
-        // Create users collection if it doesn't exist
-        if (!collectionNames.includes('users')) {
-            await db.createCollection('users');
-            console.log('Created users collection');
-
-            // Create index on email for faster lookups and to enforce uniqueness
-            await db.collection('users').createIndex({ email: 1 }, { unique: true });
-            console.log('Created unique index on email field in users collection');
-        }
-
-        console.log('Database initialization completed successfully');
-        return true;
-    } catch (err) {
-        console.error('Error initializing database:', err);
-        return false;
-    }
-};
-
-// Updated connectWithRetry function
-const connectWithRetry = async () => {
-    // Don't attempt to reconnect if already connected
-    if (isMongoConnected) {
-        console.log('MongoDB already connected, skipping connection attempt');
-        return true;
-    }
-
-    // Check if we've exceeded max attempts
-    if (mongoConnectionAttempts >= MAX_CONNECTION_ATTEMPTS) {
-        console.error(`Failed to connect to MongoDB after ${MAX_CONNECTION_ATTEMPTS} attempts`);
-        return false;
-    }
-
-    mongoConnectionAttempts++;
-    console.log(`MongoDB connection attempt ${mongoConnectionAttempts}/${MAX_CONNECTION_ATTEMPTS}...`);
-
-    try {
-        // Create MongoDB native client
-        const client = new MongoClient(process.env.MONGO_URI, {
-        });
-
-        // Connect using the MongoDB native driver
-        await client.connect();
-
-        // Test connection with a ping
-        await client.db("admin").command({ ping: 1 });
-        console.log("✅ MongoDB connected successfully to Atlas cluster!");
-
-        // Store the client for reuse
-        global.mongoClient = client;
-
-        // Initialize the database
-        await initializeDatabase();
-
-        // Connect mongoose to the same URI with our options
-        await mongoose.connect(process.env.MONGO_URI, mongooseOptions);
-
-        isMongoConnected = true;
-        mongoConnectionAttempts = 0; // Reset counter on successful connection
-        return true;
-    } catch (err) {
-        console.error('❌ MongoDB connection error:', err);
-        isMongoConnected = false;
-
-        // Only retry if we haven't exceeded max attempts
-        if (mongoConnectionAttempts < MAX_CONNECTION_ATTEMPTS) {
-            console.log(`Will retry MongoDB connection in 2 seconds (attempt ${mongoConnectionAttempts}/${MAX_CONNECTION_ATTEMPTS})...`);
-            // Wait 2 seconds before retrying
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            return connectWithRetry(); // Recursive retry
-        } else {
-            return false;
-        }
-    }
-};
-
-// Add middleware to ensure MongoDB is connected
-const ensureMongoConnected = async (req, res, next) => {
-    // Skip for health check to avoid infinite loops
-    if (req.path === '/api/health') {
-        return next();
-    }
-
-    // If MongoDB is already connected via Mongoose, proceed
-    if (isMongoConnected && mongoose.connection.readyState === 1) {
-        return next();
-    }
-
-    // If we have a native client but Mongoose is not connected, that's still okay for many operations
-    if (global.mongoClient) {
-        try {
-            // Try a quick ping to verify the native client is still connected
-            await global.mongoClient.db('admin').command({ ping: 1 });
-            console.log('MongoDB native client connected, proceeding with request despite Mongoose state:', mongoose.connection.readyState);
-
-            // Set a flag on the request to indicate that we should prefer native client operations
-            req.useNativeClient = true;
-
-            return next();
-        } catch (err) {
-            console.error('MongoDB native client ping failed:', err);
-        }
-    }
-
-    // Otherwise, try to connect
-    console.log(`MongoDB not connected (state: ${mongoose.connection.readyState}), connecting before proceeding...`);
-    const connected = await connectWithRetry();
-
-    // Check connection status
-    if (connected || global.mongoClient) {
-        console.log('MongoDB connected successfully, proceeding with request');
-        next();
-    } else {
-        console.error('MongoDB connection failed, returning error');
-        res.status(500).json({
-            success: false,
-            message: 'Database connection unavailable',
-            error: 'Cannot establish database connection. Please try again later.'
-        });
-    }
-};
-
-// Apply the connection middleware to all API routes
-app.use('/api', ensureMongoConnected);
+// Apply database connection middleware to all API routes
+app.use('/api', database.ensureConnection);
 
 // Add health check route
 app.get('/api/health', (req, res) => {
     const status = {
         status: 'ok',
-        mongo: isMongoConnected ? 'connected' : 'disconnected',
+        mongo: database.isConnected() ? 'connected' : 'disconnected',
         timestamp: new Date().toISOString(),
         environment: process.env.NODE_ENV || 'development'
     };
     res.json(status);
 });
-
-// Make server startup await MongoDB connection
-const startServer = async () => {
-    // First try to connect to MongoDB
-    const isConnected = await connectWithRetry();
-
-    if (!isConnected && process.env.NODE_ENV === 'production') {
-        console.error('Failed to connect to MongoDB. Starting server anyway in production mode.');
-    } else if (!isConnected) {
-        console.error('Failed to connect to MongoDB. Exiting.');
-        process.exit(1);
-    }
-
-    // Start server only after attempting MongoDB connection
-    if (process.env.NODE_ENV !== 'production') {
-        app.listen(PORT, () => {
-            console.log(`Server is running on port ${PORT}`);
-        });
-    } else {
-        // In production (Vercel), we don't need to explicitly call listen
-        console.log('Server ready to handle requests in serverless mode');
-    }
-};
 
 // API routes
 app.use('/api/auth', authRoutes);
@@ -270,7 +89,7 @@ app.use('/api/analytics', authMiddleware, analyticsRoutes);
 
 // Default route
 app.get('/', (req, res) => {
-    const mongoStatus = isMongoConnected ?
+    const mongoStatus = database.isConnected() ?
         '<div class="status connected">MongoDB Connected</div>' :
         '<div class="status disconnected">MongoDB Disconnected</div>';
 
@@ -388,17 +207,42 @@ app.get('/', (req, res) => {
 // Error handling middleware
 app.use(errorHandler);
 
+// Start server function - connect to database first
+const startServer = async () => {
+    try {
+        // Establish database connection before starting server
+        const { isConnected } = await database.connect();
+
+        if (!isConnected && process.env.NODE_ENV === 'production') {
+            console.warn('⚠️ Failed to connect to MongoDB initially. Starting server anyway in production mode.');
+            // In production we'll try to connect on each request
+        } else if (!isConnected) {
+            console.error('❌ Failed to connect to MongoDB. Exiting.');
+            process.exit(1);
+        }
+
+        // Start server after attempting connection
+        if (process.env.NODE_ENV !== 'production') {
+            app.listen(PORT, () => {
+                console.log(`🚀 Server running on port ${PORT}`);
+            });
+        } else {
+            // In production (Vercel), we don't need to explicitly call listen
+            console.log('🚀 Server ready to handle requests in serverless mode');
+        }
+    } catch (error) {
+        console.error('Failed to start server:', error);
+        process.exit(1);
+    }
+};
+
 // Start the server
-startServer().catch(err => {
-    console.error('Failed to start server:', err);
-    process.exit(1);
-});
+startServer();
 
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (err) => {
     console.error('Unhandled Promise Rejection:', err);
     // Don't exit in production, just log
-    // process.exit(1);
 });
 
 // For Vercel serverless deployment
