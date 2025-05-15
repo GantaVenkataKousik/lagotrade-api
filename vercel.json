@@ -14,5 +14,10 @@
   ],
   "env": {
     "NODE_ENV": "production"
-  }
+  },
+  "buildCommand": "npm install",
+  "devCommand": "npm run dev",
+  "installCommand": "npm install",
+  "outputDirectory": ".",
+  "framework": "node"
 } 
