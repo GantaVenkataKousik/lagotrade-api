@@ -78,8 +78,7 @@ let isMongoConnected = false;
 let mongoConnectionAttempts = 0;
 const MAX_CONNECTION_ATTEMPTS = 5;
 
-// Connection string for MongoDB Atlas
-const MONGO_URI = "mongodb+srv://gvk:gvk123@gvk.orbwd1t.mongodb.net/trade?retryWrites=true&w=majority&appName=gvk";
+
 
 // Add this function to initialize the database with required collections
 const initializeDatabase = async () => {
@@ -132,12 +131,7 @@ const connectWithRetry = async () => {
 
     try {
         // Create MongoDB native client
-        const client = new MongoClient(MONGO_URI, {
-            serverApi: {
-                version: ServerApiVersion.v1,
-                strict: true,
-                deprecationErrors: true,
-            }
+        const client = new MongoClient(process.env.MONGO_URI, {
         });
 
         // Connect using the MongoDB native driver
@@ -154,7 +148,7 @@ const connectWithRetry = async () => {
         await initializeDatabase();
 
         // Connect mongoose to the same URI with our options
-        await mongoose.connect(MONGO_URI, mongooseOptions);
+        await mongoose.connect(process.env.MONGO_URI, mongooseOptions);
 
         isMongoConnected = true;
         mongoConnectionAttempts = 0; // Reset counter on successful connection
