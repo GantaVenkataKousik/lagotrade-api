@@ -8,6 +8,12 @@ const path = require('path');
 // Load environment variables
 dotenv.config();
 
+// Set WhatsApp Access Token if not in environment variables
+if (!process.env.WHATSAPP_ACCESS_TOKEN) {
+    process.env.WHATSAPP_ACCESS_TOKEN = 'EAARQg8IQEWcBO9uGELWcI1lCp2VxnNmLPyhBZAUuu3hKkVkZCnP4m05mL4AgdezfWmKg6e441ktFwqbwz8yWHfC3bTyXUJ7orbAzewpvh9ZAImMt4kZCbEKz9wYGd3WEUMF7sVG9JkYhEx8QUZAFqq6BSlVW7qXuLdryjV9mZCn4xY2TVJMzDQ9CSZCxe41sZA7RaFdDKUDQrCHXNj7FZBwQ9ufV8dSDyHGUZD';
+    console.log('WhatsApp access token loaded from default value - consider adding to environment variables for security');
+}
+
 // Import database connection
 const database = require('./db/database');
 
@@ -27,6 +33,7 @@ const notificationRoutes = require('./routes/notification.routes');
 const riskManagementRoutes = require('./routes/risk-management.routes');
 const developerRoutes = require('./routes/developer.routes');
 const analyticsRoutes = require('./routes/analytics.routes');
+const whatsappRoutes = require('./routes/whatsapp.routes');
 
 // Import middleware
 const { errorHandler } = require('./middleware/error.middleware');
@@ -73,7 +80,7 @@ app.get('/api/health', (req, res) => {
 // API routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', authMiddleware, userRoutes);
-app.use('/api/markets', marketRoutes); // Some endpoints may be public
+app.use('/api/markets', marketRoutes); // Some endpoints may be public, including NSE pre-open market data
 app.use('/api/portfolio', authMiddleware, portfolioRoutes);
 app.use('/api/orders', authMiddleware, orderRoutes);
 app.use('/api/trading', authMiddleware, tradingRoutes);
@@ -86,6 +93,7 @@ app.use('/api/notifications', authMiddleware, notificationRoutes);
 app.use('/api/risk-management', authMiddleware, riskManagementRoutes);
 app.use('/api/developer', authMiddleware, developerRoutes);
 app.use('/api/analytics', authMiddleware, analyticsRoutes);
+app.use('/api/whatsapp', whatsappRoutes); // WhatsApp endpoints
 
 // Default route
 app.get('/', (req, res) => {
@@ -195,6 +203,7 @@ app.get('/', (req, res) => {
                     <li>/api/risk-management</li>
                     <li>/api/developer</li>
                     <li>/api/analytics</li>
+                    <li>/api/whatsapp</li>
                 </ul>
             </div>
         </div>

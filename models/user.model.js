@@ -29,6 +29,19 @@ const userSchema = new mongoose.Schema({
         type: String,
         trim: true
     },
+    mobileVerification: {
+        isVerified: {
+            type: Boolean,
+            default: false
+        },
+        otp: String,
+        otpExpiry: Date,
+        verificationAttempts: {
+            type: Number,
+            default: 0
+        },
+        lastVerificationAttempt: Date
+    },
     avatar: {
         type: String
     },
@@ -58,6 +71,10 @@ const userSchema = new mongoose.Schema({
             sms: {
                 type: Boolean,
                 default: false
+            },
+            whatsapp: {
+                type: Boolean,
+                default: false
             }
         }
     },
@@ -69,6 +86,24 @@ const userSchema = new mongoose.Schema({
         type: String,
         enum: ['local', 'google', 'facebook'],
         default: 'local'
+    },
+    onboardingStatus: {
+        type: String,
+        enum: ['new', 'mobile_pending', 'broker_pending', 'kyc_pending', 'complete'],
+        default: 'new'
+    },
+    brokerIntegration: {
+        isConnected: {
+            type: Boolean,
+            default: false
+        },
+        broker: {
+            type: String,
+            enum: ['upstox', 'zerodha', 'angel', 'other'],
+            default: null
+        },
+        accountId: String,
+        lastSynced: Date
     },
     resetPasswordOTP: String,
     resetPasswordExpiry: Date,
@@ -147,6 +182,41 @@ userSchema.methods.generateRefreshToken = function () {
         process.env.REFRESH_TOKEN_SECRET || 'fallback_refresh_token_secret_for_development',
         { expiresIn: process.env.REFRESH_TOKEN_EXPIRE || '7d' }
     );
+};
+
+// Check if mobile number is verified
+userSchema.methods.isMobileVerified = function () {
+    return this.mobileVerification && this.mobileVerification.isVerified;
+};
+
+// Generate mobile verification OTP
+userSchema.methods.generateMobileVerificationOTP = function () {
+    const otp = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit OTP
+    this.mobileVerification = {
+        ...this.mobileVerification,
+        otp,
+        otpExpiry: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes expiry
+        verificationAttempts: 0,
+        lastVerificationAttempt: new Date()
+    };
+    return otp;
+};
+
+// Check onboarding status
+userSchema.methods.getOnboardingRequirements = function () {
+    const requirements = [];
+
+    // Check mobile verification
+    if (!this.mobileVerification || !this.mobileVerification.isVerified) {
+        requirements.push('mobile_verification');
+    }
+
+    // Check broker integration
+    if (!this.brokerIntegration || !this.brokerIntegration.isConnected) {
+        requirements.push('broker_integration');
+    }
+
+    return requirements;
 };
 
 module.exports = mongoose.model('User', userSchema); 
