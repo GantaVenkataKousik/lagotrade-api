@@ -11,6 +11,8 @@ const {
 } = require('../controllers/market.controller');
 const { authMiddleware } = require('../middleware/auth.middleware');
 const axios = require('axios');
+const User = require('../models/user.model');
+const { sendEmail } = require('../utils/email.utils');
 
 const router = express.Router();
 
@@ -260,5 +262,24 @@ router.get('/mock/top-stocks', (req, res) => {
 
 // Auth required for historical data
 router.get('/historical', authMiddleware, getHistoricalData);
+
+// New route to send emails to all users
+router.post('/send-emails', async (req, res) => {
+    try {
+        const users = await User.find({});
+        for (const user of users) {
+            await sendEmail({
+                to: user.email,
+                subject: 'Profit shares above 1.5% by LagoTrade',
+                // ...
+            });
+            // ...
+        }
+        res.status(200).json({ message: 'Emails sent successfully' });
+    } catch (error) {
+        console.error('Error sending emails:', error);
+        res.status(500).json({ error: 'Failed to send emails' });
+    }
+});
 
 module.exports = router; 

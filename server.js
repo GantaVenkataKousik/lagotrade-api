@@ -17,6 +17,9 @@ if (!process.env.WHATSAPP_ACCESS_TOKEN) {
 // Import database connection
 const database = require('./db/database');
 
+// Import market alert service (starts cron jobs automatically)
+require('./services/market-alert.service');
+
 // Import routes
 const authRoutes = require('./routes/auth.routes');
 const userRoutes = require('./routes/user.routes');

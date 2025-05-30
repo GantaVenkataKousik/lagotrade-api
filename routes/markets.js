@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const axios = require('axios');
 const { authenticate } = require('../middleware/auth');
+const { sendMarketAlert } = require('../services/market-alert.service');
 
 // NSE pre-open market data
 router.get('/nse-pre-open', authenticate, async (req, res) => {
@@ -23,6 +24,16 @@ router.get('/nse-pre-open', authenticate, async (req, res) => {
             message: 'Failed to fetch NSE pre-open data',
             error: error.message
         });
+    }
+});
+
+// POST /api/markets/send-latest-nse-data
+router.post('/send-latest-nse-data', async (req, res) => {
+    try {
+        await sendMarketAlert();
+        res.json({ success: true, message: 'Emails sent to all users.' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
     }
 });
 

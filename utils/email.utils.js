@@ -18,7 +18,19 @@ exports.sendEmail = async (options) => {
         // Create a transporter based on environment
         let transporter;
 
-        if (process.env.NODE_ENV === 'production') {
+        // If Gmail is configured, use Gmail regardless of environment
+        if (process.env.EMAIL_HOST === 'smtp.gmail.com' && process.env.EMAIL_USER && process.env.EMAIL_PASSWORD) {
+            console.log('📧 Using Gmail configuration');
+            transporter = nodemailer.createTransport({
+                host: process.env.EMAIL_HOST,
+                port: parseInt(process.env.EMAIL_PORT) || 587,
+                secure: process.env.EMAIL_PORT === '465', // true for 465, false for other ports
+                auth: {
+                    user: process.env.EMAIL_USER,
+                    pass: process.env.EMAIL_PASSWORD
+                }
+            });
+        } else if (process.env.NODE_ENV === 'production') {
             // Production transporter using actual SMTP settings
             transporter = nodemailer.createTransport({
                 host: process.env.EMAIL_HOST,
@@ -31,6 +43,7 @@ exports.sendEmail = async (options) => {
             });
         } else {
             // Development/testing transporter using Ethereal
+            console.log('📧 Using Ethereal test email service');
             // Create a test account on the fly if not provided in env vars
             if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
                 const testAccount = await nodemailer.createTestAccount();

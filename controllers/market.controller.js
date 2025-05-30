@@ -4,6 +4,7 @@
 
 const { getCache, setCache } = require('../utils/db.utils');
 const { fetchUpstoxMarketData, searchInstruments } = require('../services/broker.service');
+const axios = require('axios');
 
 // Get market quotes for symbols
 exports.getMarketQuotes = async (req, res, next) => {
@@ -229,4 +230,18 @@ const generateDummyHistoricalData = (symbol, interval, from, to) => {
     }
 
     return data;
+};
+
+exports.getPreOpenMarketData = async (req, res) => {
+    try {
+        const { data } = await axios.get('https://www.nseindia.com/api/market-data-pre-open?key=NIFTY', {
+            headers: {
+                'User-Agent': 'Mozilla/5.0', // NSE blocks non-browser user agents
+                'Accept': 'application/json'
+            }
+        });
+        res.json(data);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to fetch NSE data' });
+    }
 }; 

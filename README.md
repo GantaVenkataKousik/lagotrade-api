@@ -5,7 +5,202 @@ LagoTrade is a comprehensive trading platform with AI-powered trading insights, 
 ## Architecture Overview
 
 ### Database Architecture
+NSE NIFTY 50:
 
+API :
+
+
+https://www.nseindia.com/api/market-data-pre-open?key=NIFTY
+
+
+RESPONSE:
+
+{
+    "declines": 22,
+    "unchanged": 13,
+    "data": [
+        {
+            "metadata": {
+                "symbol": "INFY",
+                "identifier": "INFYEQN",
+                "purpose": null,
+                "lastPrice": 1571,
+                "change": 7.4,
+                "pChange": 0.47,
+                "previousClose": 1585.6,
+                "finalQuantity": 60095,
+                "totalTurnover": 94409245,
+                "marketCap": 5697750293419.47,
+                "yearHigh": 2006.45,
+                "yearLow": 1307,
+                "iep": 1571,
+                "chartTodayPath": "https://nsearchives.nseindia.com/today/preOpen_INFYEQN.svg"
+            },
+            "detail": {
+                "preOpenMarket": {
+                    "preopen": [
+                        {
+                            "price": 1570.1,
+                            "buyQty": 755,
+                            "sellQty": 0
+                        },
+                        {
+                            "price": 1570.5,
+                            "buyQty": 5,
+                            "sellQty": 0
+                        },
+                        {
+                            "price": 1570.6,
+                            "buyQty": 100,
+                            "sellQty": 0
+                        },
+                        {
+                            "price": 1570.8,
+                            "buyQty": 20,
+                            "sellQty": 0
+                        },
+                        {
+                            "price": 1571,
+                            "buyQty": 61,
+                            "sellQty": 0,
+                            "iep": true
+                        },
+                        {
+                            "price": 1571.5,
+                            "buyQty": 0,
+                            "sellQty": 400
+                        },
+                        {
+                            "price": 1572,
+                            "buyQty": 0,
+                            "sellQty": 100
+                        },
+                        {
+                            "price": 1572.3,
+                            "buyQty": 0,
+                            "sellQty": 2
+                        },
+                        {
+                            "price": 1572.8,
+                            "buyQty": 0,
+                            "sellQty": 500
+                        },
+                        {
+                            "price": 1573.2,
+                            "buyQty": 0,
+                            "sellQty": 3
+                        }
+                    ],
+                    "ato": {
+                        "totalBuyQuantity": 0,
+                        "totalSellQuantity": 0
+                    },
+                    "IEP": 1571,
+                    "totalTradedVolume": 60095,
+                    "finalPrice": 1571,
+                    "finalQuantity": 60095,
+                    "lastUpdateTime": "30-May-2025 09:07:47",
+                    "totalSellQuantity": 154169,
+                    "totalBuyQuantity": 43286,
+                    "atoBuyQty": 0,
+                    "atoSellQty": 0,
+                    "Change": 7.4,
+                    "perChange": 0.47,
+                    "prevClose": 1585.6
+                }
+            }
+        },
+        {
+            "metadata": {
+                "symbol": "APOLLOHOSP",
+                "identifier": "APOLLOHOSPEQN",
+                "purpose": null,
+                "lastPrice": 6950,
+                "change": 27,
+                "pChange": 0.39,
+                "previousClose": 6923,
+                "finalQuantity": 549,
+                "totalTurnover": 3815550,
+                "marketCap": 698726545835.41,
+                "yearHigh": 7545.35,
+                "yearLow": 5693.2,
+                "iep": 6950,
+                "chartTodayPath": "https://nsearchives.nseindia.com/today/preOpen_APOLLOHOSPEQN.svg"
+            },
+            "detail": {
+                "preOpenMarket": {
+                    "preopen": [
+                        {
+                            "price": 6925.5,
+                            "buyQty": 15,
+                            "sellQty": 0
+                        },
+                        {
+                            "price": 6930,
+                            "buyQty": 49,
+                            "sellQty": 0
+                        },
+                        {
+                            "price": 6935,
+                            "buyQty": 227,
+                            "sellQty": 0
+                        },
+                        {
+                            "price": 6936,
+                            "buyQty": 16,
+                            "sellQty": 0
+                        },
+                        {
+                            "price": 6947,
+                            "buyQty": 5,
+                            "sellQty": 0
+                        },
+                        {
+                            "price": 6950,
+                            "buyQty": 0,
+                            "sellQty": 17,
+                            "iep": true
+                        },
+                        {
+                            "price": 6956.5,
+                            "buyQty": 0,
+                            "sellQty": 1
+                        },
+                        {
+                            "price": 6957.5,
+                            "buyQty": 0,
+                            "sellQty": 323
+                        },
+                        {
+                            "price": 6972,
+                            "buyQty": 0,
+                            "sellQty": 10
+                        },
+                        {
+                            "price": 6975,
+                            "buyQty": 0,
+                            "sellQty": 10
+                        }
+                    ],
+                    "ato": {
+                        "totalBuyQuantity": 0,
+                        "totalSellQuantity": 0
+                    },
+                    "IEP": 6950,
+                    "totalTradedVolume": 549,
+                    "finalPrice": 6950,
+                    "finalQuantity": 549,
+                    "lastUpdateTime": "30-May-2025 09:07:51",
+                    "totalSellQuantity": 6027,
+                    "totalBuyQuantity": 3066,
+                    "atoBuyQty": 0,
+                    "atoSellQty": 0,
+                    "Change": 27,
+                    "perChange": 0.39,
+                    "prevClose": 6923
+                }
+            }
+        },
 We've adopted a multi-database approach similar to Upstox:
 
 1. **MongoDB**
