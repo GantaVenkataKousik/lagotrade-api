@@ -37,6 +37,7 @@ const riskManagementRoutes = require('./routes/risk-management.routes');
 const developerRoutes = require('./routes/developer.routes');
 const analyticsRoutes = require('./routes/analytics.routes');
 const whatsappRoutes = require('./routes/whatsapp.routes');
+const aiTrainingRoutes = require('./routes/ai-training.routes');
 
 // Import middleware
 const { errorHandler } = require('./middleware/error.middleware');
@@ -97,6 +98,7 @@ app.use('/api/risk-management', authMiddleware, riskManagementRoutes);
 app.use('/api/developer', authMiddleware, developerRoutes);
 app.use('/api/analytics', authMiddleware, analyticsRoutes);
 app.use('/api/whatsapp', whatsappRoutes); // WhatsApp endpoints
+app.use('/api/ai-training', aiTrainingRoutes);
 
 // Default route
 app.get('/', (req, res) => {
@@ -207,6 +209,7 @@ app.get('/', (req, res) => {
                     <li>/api/developer</li>
                     <li>/api/analytics</li>
                     <li>/api/whatsapp</li>
+                    <li>/api/ai-training</li>
                 </ul>
             </div>
         </div>
