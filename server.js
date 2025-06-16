@@ -2,17 +2,8 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
-const dotenv = require('dotenv');
 const path = require('path');
-
-// Load environment variables
-dotenv.config();
-
-// Set WhatsApp Access Token if not in environment variables
-if (!process.env.WHATSAPP_ACCESS_TOKEN) {
-    process.env.WHATSAPP_ACCESS_TOKEN = 'EAARQg8IQEWcBO9uGELWcI1lCp2VxnNmLPyhBZAUuu3hKkVkZCnP4m05mL4AgdezfWmKg6e441ktFwqbwz8yWHfC3bTyXUJ7orbAzewpvh9ZAImMt4kZCbEKz9wYGd3WEUMF7sVG9JkYhEx8QUZAFqq6BSlVW7qXuLdryjV9mZCn4xY2TVJMzDQ9CSZCxe41sZA7RaFdDKUDQrCHXNj7FZBwQ9ufV8dSDyHGUZD';
-    console.log('WhatsApp access token loaded from default value - consider adding to environment variables for security');
-}
+const config = require('./config');
 
 // Import database connection
 const database = require('./db/database');
@@ -45,23 +36,21 @@ const { authMiddleware } = require('./middleware/auth.middleware');
 
 // Initialize app
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = config.server.port || 5000;
 
-// Updated CORS configuration for production and development
+// Updated CORS configuration
 const corsOptions = {
-    origin: process.env.NODE_ENV === 'production'
+    origin: config.server.env === 'production'
         ? ['https://lagotrade.vercel.app', 'https://www.lagotrade.vercel.app']
-        : 'http://localhost:3000',
+        : ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002'],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
     optionsSuccessStatus: 200
 };
+
 app.use(cors(corsOptions));
-
-// For preflight requests
 app.options('*', cors(corsOptions));
-
 app.use(helmet());
 app.use(morgan('dev'));
 app.use(express.json());
@@ -76,7 +65,7 @@ app.get('/api/health', (req, res) => {
         status: 'ok',
         mongo: database.isConnected() ? 'connected' : 'disconnected',
         timestamp: new Date().toISOString(),
-        environment: process.env.NODE_ENV || 'development'
+        environment: config.server.env || 'development'
     };
     res.json(status);
 });
@@ -84,7 +73,7 @@ app.get('/api/health', (req, res) => {
 // API routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', authMiddleware, userRoutes);
-app.use('/api/markets', marketRoutes); // Some endpoints may be public, including NSE pre-open market data
+app.use('/api/markets', marketRoutes);
 app.use('/api/portfolio', authMiddleware, portfolioRoutes);
 app.use('/api/orders', authMiddleware, orderRoutes);
 app.use('/api/trading', authMiddleware, tradingRoutes);
@@ -92,12 +81,12 @@ app.use('/api/ai-predictor', authMiddleware, aiPredictorRoutes);
 app.use('/api/auto-trading', authMiddleware, autoTradingRoutes);
 app.use('/api/brokers', authMiddleware, brokerRoutes);
 app.use('/api/community', authMiddleware, communityRoutes);
-app.use('/api/learn', learnRoutes); // Some endpoints may be public
+app.use('/api/learn', learnRoutes);
 app.use('/api/notifications', authMiddleware, notificationRoutes);
 app.use('/api/risk-management', authMiddleware, riskManagementRoutes);
 app.use('/api/developer', authMiddleware, developerRoutes);
 app.use('/api/analytics', authMiddleware, analyticsRoutes);
-app.use('/api/whatsapp', whatsappRoutes); // WhatsApp endpoints
+app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/ai-training', aiTrainingRoutes);
 
 // Default route
@@ -222,29 +211,16 @@ app.get('/', (req, res) => {
 // Error handling middleware
 app.use(errorHandler);
 
-// Start server function - connect to database first
+// Start server function
 const startServer = async () => {
     try {
-        // Establish database connection before starting server
-        const { isConnected } = await database.connect();
+        // Connect to MongoDB
+        await database.connect(config.mongodb.uri);
 
-        if (!isConnected && process.env.NODE_ENV === 'production') {
-            console.warn('⚠️ Failed to connect to MongoDB initially. Starting server anyway in production mode.');
-            // In production we'll try to connect on each request
-        } else if (!isConnected) {
-            console.error('❌ Failed to connect to MongoDB. Exiting.');
-            process.exit(1);
-        }
-
-        // Start server after attempting connection
-        if (process.env.NODE_ENV !== 'production') {
-            app.listen(PORT, () => {
-                console.log(`🚀 Server running on port ${PORT}`);
-            });
-        } else {
-            // In production (Vercel), we don't need to explicitly call listen
-            console.log('🚀 Server ready to handle requests in serverless mode');
-        }
+        // Start server
+        app.listen(PORT, () => {
+            console.log(`🚀 Server running on port ${PORT}`);
+        });
     } catch (error) {
         console.error('Failed to start server:', error);
         process.exit(1);
@@ -257,8 +233,6 @@ startServer();
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (err) => {
     console.error('Unhandled Promise Rejection:', err);
-    // Don't exit in production, just log
 });
 
-// For Vercel serverless deployment
 module.exports = app; 

@@ -13,11 +13,40 @@ const { authMiddleware } = require('../middleware/auth.middleware');
 const axios = require('axios');
 const User = require('../models/user.model');
 const { sendEmail } = require('../utils/email.utils');
+const UpstoxMarketService = require('../services/upstox-market.service');
 
 const router = express.Router();
 
 // Public routes
-router.get('/quotes', getMarketQuotes);
+router.get('/quotes', async (req, res) => {
+    try {
+        const { instrumentKeys } = req.query;
+
+        if (!instrumentKeys) {
+            return res.status(400).json({
+                success: false,
+                message: 'Instrument keys are required'
+            });
+        }
+
+        const quotes = await UpstoxMarketService.getFullMarketQuote(
+            instrumentKeys.split(',')
+        );
+
+        res.status(200).json({
+            success: true,
+            data: quotes
+        });
+    } catch (error) {
+        console.error('Market Quote Error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch market quotes',
+            error: error.message
+        });
+    }
+});
+
 router.get('/indices', getMarketIndices);
 router.get('/search', searchInstruments);
 
@@ -261,7 +290,42 @@ router.get('/mock/top-stocks', (req, res) => {
 });
 
 // Auth required for historical data
-router.get('/historical', authMiddleware, getHistoricalData);
+router.get('/historical', authMiddleware, async (req, res) => {
+    try {
+        const {
+            instrumentKey,
+            interval = '1day',
+            fromDate,
+            toDate
+        } = req.query;
+
+        if (!instrumentKey) {
+            return res.status(400).json({
+                success: false,
+                message: 'Instrument key is required'
+            });
+        }
+
+        const historicalData = await UpstoxMarketService.getHistoricalData(
+            instrumentKey,
+            interval,
+            fromDate,
+            toDate
+        );
+
+        res.status(200).json({
+            success: true,
+            data: historicalData
+        });
+    } catch (error) {
+        console.error('Historical Data Error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch historical market data',
+            error: error.message
+        });
+    }
+});
 
 // New route to send emails to all users
 router.post('/send-emails', async (req, res) => {
@@ -279,6 +343,35 @@ router.post('/send-emails', async (req, res) => {
     } catch (error) {
         console.error('Error sending emails:', error);
         res.status(500).json({ error: 'Failed to send emails' });
+    }
+});
+
+// Get top market data (gainers/losers) - protected route
+router.get('/top-stocks', authMiddleware, async (req, res) => {
+    try {
+        const {
+            exchange = 'NSE',
+            segment = 'NIFTY_50',
+            limit = 50
+        } = req.query;
+
+        const topStocks = await UpstoxMarketService.getTopMarketData({
+            exchange,
+            segment,
+            limit: Number(limit)
+        });
+
+        res.status(200).json({
+            success: true,
+            data: topStocks
+        });
+    } catch (error) {
+        console.error('Top Market Data Error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch top market data',
+            error: error.message
+        });
     }
 });
 
